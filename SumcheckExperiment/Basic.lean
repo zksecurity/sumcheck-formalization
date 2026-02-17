@@ -181,8 +181,12 @@ theorem honest_prover_sum_check_succ {F : Type*} [Field F] [Fintype F] {m : ℕ}
     simp +decide [ Polynomial.eval_finset_sum, Polynomial.eval_mul, Polynomial.eval_prod, Polynomial.eval_pow, Polynomial.eval_X, Polynomial.eval_C ];
     refine' Finset.sum_congr rfl fun x hx => _;
     refine' congr_arg _ ( Finset.prod_congr rfl fun i hi => _ );
-    split_ifs <;> simp_all +decide [ Fin.ext_iff, Nat.lt_succ_iff ];
-    all_goals sorry
+    split_ifs <;> simp_all +decide [Fin.ext_iff, Nat.lt_succ_iff] <;> (
+      have : (j.castSucc : ℕ) = j := Fin.coe_castSucc j
+      have : (j.succ : ℕ) = (j : ℕ) + 1 := Fin.val_succ j
+      have : (j : ℕ) < m := j.isLt
+      simp only [Fin.lt_def, Fin.le_def] at *
+      first | omega | (convert rfl using 4 <;> omega))
 
 /-
 A prover strategy is a collection of functions $P_i$ that map previous challenges to a polynomial. The verifier accepts if all degree checks pass, the first sum check matches $C$, subsequent sum checks match the previous evaluation, and the final evaluation matches $g$.
@@ -414,6 +418,6 @@ theorem verifierAcceptsCons {F : Type*} [Field F] [Fintype F] {n : ℕ} [NeZero 
           congr! 2
           generalize_proofs at *;
           ext i; induction i using Fin.inductionOn <;> simp +decide [ * ] ;
-          sorry;
+          rfl;
       · erw [ MvPolynomial.eval_eq', MvPolynomial.eval₂_eq' ];
         simp +decide [ Fin.prod_univ_succ, MvPolynomial.eval_C, MvPolynomial.eval_X ]
