@@ -67,6 +67,29 @@ theorem schwartz_zippel {F : Type*} [Field F] [Fintype F] [DecidableEq F]
   · exact hg
 
 /-
+Probability over a product set can be computed by summing the probabilities of the conditioned events.
+-/
+open Finset
+
+theorem prob_split {α : Type*} [Fintype α] [DecidableEq α] {n : ℕ}
+    (S : Finset α) (p : (Fin (n + 1) → α) → Prop) [DecidablePred p] :
+    Prob (Fintype.piFinset fun _ : Fin (n + 1) => S) p =
+    (∑ x ∈ S, Prob (Fintype.piFinset fun _ : Fin n => S) (fun r => p (Fin.cons x r))) / S.card := by
+      unfold Prob;
+      simp +decide only [div_eq_mul_inv, Finset.sum_mul _ _ _];
+      rw [ ← Finset.sum_mul _ _ _, ← Finset.sum_mul _ _ _ ];
+      rw [ show ( Fintype.piFinset fun _ : Fin ( n + 1 ) => S ) = Finset.image ( fun x : α × ( Fin n → α ) => Fin.cons x.1 x.2 ) ( S ×ˢ Fintype.piFinset fun _ : Fin n => S ) from ?_, Finset.card_image_of_injective ];
+      · rw [ Finset.card_filter ];
+        rw [ Finset.sum_image ];
+        · rw [ Finset.sum_product ] ; simp +decide [ Finset.sum_ite ] ; ring;
+        · intro x hx y hy; aesop;
+      · intro x y hxy;
+        simp_all +decide [ funext_iff, Fin.forall_fin_succ ];
+        exact Prod.ext hxy.1 ( funext hxy.2 );
+      · ext; simp [Fin.cons];
+        exact ⟨ fun h => ⟨ _, _, ⟨ h 0, fun i => h ( Fin.succ i ) ⟩, by ext i; cases i using Fin.inductionOn <;> rfl ⟩, by rintro ⟨ a, b, ⟨ ha, hb ⟩, rfl ⟩ i; cases i using Fin.inductionOn <;> aesop ⟩
+
+/-
 Let $g \in \FF[X_1, \ldots, X_n]$ and let $H \subseteq \FF$ be a finite non-empty subset. The multivariate sum of $g$ over $H$ is
 \[
   \sigma(g, H, n)
@@ -324,6 +347,33 @@ theorem soundness_base_case {F : Type*} [Field F] [Fintype F] [DecidableEq F]
   rw [ show Prob ( Fintype.piFinset fun _ => Finset.univ ) ( VerifierAccepts g H C d P ) = ( Finset.card ( Finset.filter ( fun r : Fin 1 → F => VerifierAccepts g H C d P r ) ( Fintype.piFinset fun _ => Finset.univ ) ) : ℚ ) / ( Fintype.card F ) from ?_ ];
   · gcongr;
   · unfold Prob; aesop;
+
+/-
+If two polynomials have different sums over H, they agree at a random point with probability at most d/|F|.
+-/
+open MvPolynomial Finset Polynomial
+
+theorem soundness_round_one_bound {F : Type*} [Field F] [Fintype F] [DecidableEq F]
+    (H : Finset F) (C : F) (d : ℕ) (s_1 : Polynomial F) (s_1_star : Polynomial F)
+    (h_deg : s_1.degree ≤ d) (h_deg_star : s_1_star.degree ≤ d)
+    (h_sum : ∑ a ∈ H, s_1.eval a = C)
+    (h_sum_star : ∑ a ∈ H, s_1_star.eval a ≠ C) :
+    Prob (Fintype.piFinset fun _ : Fin 1 => (Finset.univ : Finset F))
+      (fun r => s_1.eval (r 0) = s_1_star.eval (r 0)) ≤ d / Fintype.card F := by
+        have h_prob_bound : (Prob (Finset.univ : Finset F) (fun x => s_1.eval x = s_1_star.eval x)) ≤ d / (Fintype.card F) := by
+          have h_diff : s_1 - s_1_star ≠ 0 := by
+            exact sub_ne_zero_of_ne ( by aesop )
+          have h_prob_bound : (Finset.card (Finset.filter (fun x => s_1.eval x = s_1_star.eval x) (Finset.univ : Finset F))) ≤ d := by
+            have := Polynomial.card_roots' ( s_1 - s_1_star );
+            exact le_trans ( Finset.card_le_card ( show Finset.filter ( fun x => Polynomial.eval x s_1 = Polynomial.eval x s_1_star ) Finset.univ ⊆ ( s_1 - s_1_star |> Polynomial.roots |> Multiset.toFinset ) from fun x hx => by aesop ) ) ( le_trans ( Multiset.toFinset_card_le _ ) ( this.trans ( Polynomial.natDegree_le_of_degree_le ( le_trans ( Polynomial.degree_sub_le _ _ ) ( max_le h_deg h_deg_star ) ) ) ) );
+          exact div_le_div_of_nonneg_right ( mod_cast h_prob_bound ) ( Nat.cast_nonneg _ );
+        convert h_prob_bound using 1;
+        convert rfl;
+        refine' congr_arg₂ _ ( mod_cast _ ) ( mod_cast _ );
+        · refine' Finset.card_bij ( fun x hx => fun _ => x ) _ _ _ <;> simp +decide;
+          · simp +decide [ funext_iff, Fin.forall_fin_one ];
+          · exact fun b hb => ⟨ b 0, hb, by ext i; fin_cases i; rfl ⟩;
+        · simp +decide [ Fintype.card_pi ]
 
 /-
 Verifier acceptance decomposes into the first round checks and the acceptance of the recursive instance.
