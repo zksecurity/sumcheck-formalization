@@ -10,7 +10,7 @@ I asked Claude Code (Opus 4.6)
 
 The result is in docs directory.
 
-I asked Aristotle to formalize the LaTeX document repeatedly. When Aristotle was not producing new code, I asked Claude Code to state the missing theorem, and asked Aristotle to finish the proofs.
+I asked [Aristotle](https://aristotle.harmonic.fun/) to formalize the LaTeX document repeatedly. When Aristotle was not producing new code, I asked Claude Code to state the missing theorem, and asked Aristotle to finish the proofs.
 
 ### What I have not done
 
