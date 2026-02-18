@@ -77,7 +77,12 @@ open Polynomial Finset
 theorem univariate_root_bound {F : Type*} [Field F] [Fintype F] [DecidableEq F]
     (p : Polynomial F) (hp : p ≠ 0) {d : ℕ} (hd : p.degree ≤ d) :
     Prob (Finset.univ : Finset F) (fun r => p.eval r = 0) ≤ (d : ℚ) / Fintype.card F := by
-  sorry
+  have h_schwartz_zippel : (Finset.card (Finset.filter (fun r => p.eval r = 0) Finset.univ)) ≤ d := by
+    have h_deg : p.degree ≤ d := hd
+    exact le_trans ( Finset.card_le_card ( show Finset.filter ( fun r => p.eval r = 0 ) Finset.univ ⊆ p.roots.toFinset from fun x hx => by aesop ) ) ( by exact le_trans ( Multiset.toFinset_card_le _ ) <| by exact le_trans ( Polynomial.card_roots' _ ) <| by rw [ Polynomial.natDegree_le_iff_degree_le ] ; exact h_deg );
+  have h_prob : (Finset.card (Finset.filter (fun r => p.eval r = 0) Finset.univ)) / (Fintype.card F : ℚ) ≤ d / (Fintype.card F : ℚ) := by
+    gcongr;
+  convert h_prob using 1
 
 /-
 Probability over a product set can be computed by summing the probabilities of the conditioned events.
@@ -601,4 +606,15 @@ theorem soundness {F : Type*} [Field F] [Fintype F] [DecidableEq F] {n : ℕ} [N
     (hC : C ≠ sigma g H) (hd : ∀ i, degreeOf i g ≤ d) :
     ∀ P : ProverStrategy n F,
     Prob (Fintype.piFinset fun _ : Fin n => univ) (VerifierAccepts g H C d P) ≤ (n * d : ℚ) / Fintype.card F := by
-  sorry
+  have h_ind : ∀ (n : ℕ) [NeZero n], ∀ (g : MvPolynomial (Fin n) F) (H : Finset F) (C : F) (d : ℕ), C ≠ sigma g H → (∀ i, degreeOf i g ≤ d) → ∀ P : ProverStrategy n F, Prob (Fintype.piFinset fun _ : Fin n => univ) (VerifierAccepts g H C d P) ≤ (n * d : ℚ) / Fintype.card F := by
+    intro n
+    induction' n with n ih;
+    · exfalso; exact NeZero.ne 0 rfl;
+    · intro _ g H C d hC hd P;
+      by_cases hn : NeZero n;
+      · convert soundness_step ( fun g' H C' d hC' hd' P' => ih g' H C' d hC' hd' P' ) g H C d hC hd P using 1;
+        norm_cast;
+      · cases n <;> simp_all +decide [ NeZero ];
+        · convert soundness_base_case g H C d hC hd P using 1;
+        · exact False.elim <| hn <| NeZero.of_gt <| Nat.succ_pos _;
+  exact h_ind n g H C d hC hd
