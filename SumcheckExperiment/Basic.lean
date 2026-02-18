@@ -285,6 +285,19 @@ theorem completeness {F : Type*} [Field F] [Fintype F] {n : ℕ} [NeZero n]
         · convert honest_prover_final_check g H r using 1
 
 /-
+The honest prover's polynomial for round 0, evaluated at r0, equals sigma of the partially evaluated polynomial.
+-/
+open MvPolynomial Finset Polynomial
+
+theorem honest_prover_eval_zero_eq_sigma_eval {F : Type*} [Field F] [Fintype F] {n : ℕ} [NeZero n]
+    (g : MvPolynomial (Fin (n + 1)) F) (H : Finset F) (r0 : F) :
+    (honest_prover_poly g H 0 (Fin.elim0)).eval r0 =
+    sigma (MvPolynomial.eval₂ MvPolynomial.C (Fin.cons (MvPolynomial.C r0) MvPolynomial.X) g) H := by
+      unfold honest_prover_poly sigma; simp +decide [ Fin.forall_fin_one ] ;
+      simp +decide [ Polynomial.eval_finset_sum, MvPolynomial.aeval_def, MvPolynomial.eval₂_eq' ];
+      simp +decide [ Fin.prod_univ_succ, Polynomial.eval_prod ]
+
+/-
 The base case of the soundness proof (n=1). If the claimed sum is incorrect, the probability of acceptance is at most d/|F|.
 -/
 open MvPolynomial Finset Polynomial
@@ -374,6 +387,28 @@ theorem soundness_round_one_bound {F : Type*} [Field F] [Fintype F] [DecidableEq
           · simp +decide [ funext_iff, Fin.forall_fin_one ];
           · exact fun b hb => ⟨ b 0, hb, by ext i; fin_cases i; rfl ⟩;
         · simp +decide [ Fintype.card_pi ]
+
+/-
+Individual degree bounds are preserved when partially evaluating the first variable.
+-/
+open MvPolynomial Finset Polynomial
+
+theorem degreeOf_eval2_cons_le {F : Type*} [Field F] {n : ℕ}
+    (g : MvPolynomial (Fin (n + 1)) F) (r0 : F) (d : ℕ)
+    (hd : ∀ i, degreeOf i g ≤ d) :
+    ∀ i : Fin n, degreeOf i (MvPolynomial.eval₂ MvPolynomial.C (Fin.cons (MvPolynomial.C r0) MvPolynomial.X) g) ≤ d := by
+      intro i
+      have := hd (Fin.succ i);
+      rw [ MvPolynomial.eval₂_eq' ] at *;
+      simp +decide [ MvPolynomial.degreeOf_eq_sup, Fin.prod_univ_succ ] at this ⊢;
+      simp +decide [ MvPolynomial.coeff_sum, MvPolynomial.coeff_C_mul, MvPolynomial.coeff_X_pow ];
+      intro b hb;
+      obtain ⟨ x, hx ⟩ := Finset.exists_ne_zero_of_sum_ne_zero hb;
+      rw [ show ( MvPolynomial.C r0 ^ ( x 0 ) * ∏ i : Fin n, MvPolynomial.X i ^ ( x ( Fin.succ i ) ) ) = MvPolynomial.monomial ( ∑ i : Fin n, x ( Fin.succ i ) • Finsupp.single i 1 ) ( r0 ^ ( x 0 ) ) from ?_ ] at hx;
+      · simp_all +decide [ MvPolynomial.coeff_monomial ];
+        rw [ ← hx.2.1 ] ; simp +decide [ Finsupp.single_apply, Finset.sum_apply' ] ; aesop;
+      · simp +decide [ MvPolynomial.monomial_eq, Finset.prod_pow_eq_pow_sum ];
+        simp +decide [ Finsupp.single_apply, Finset.sum_apply' ]
 
 /-
 Verifier acceptance decomposes into the first round checks and the acceptance of the recursive instance.
@@ -471,3 +506,71 @@ theorem verifierAcceptsCons {F : Type*} [Field F] [Fintype F] {n : ℕ} [NeZero 
           rfl;
       · erw [ MvPolynomial.eval_eq', MvPolynomial.eval₂_eq' ];
         simp +decide [ Fin.prod_univ_succ, MvPolynomial.eval_C, MvPolynomial.eval_X ]
+
+/-
+The inductive step of the soundness proof: if soundness holds for n variables, it holds for n+1.
+-/
+open MvPolynomial Finset Polynomial
+
+theorem soundness_step {F : Type*} [Field F] [Fintype F] [DecidableEq F] {n : ℕ} [NeZero n]
+    (IH : ∀ (g' : MvPolynomial (Fin n) F) (H : Finset F) (C' : F) (d : ℕ),
+      C' ≠ sigma g' H → (∀ i, degreeOf i g' ≤ d) →
+      ∀ P' : ProverStrategy n F,
+      Prob (Fintype.piFinset fun _ : Fin n => univ) (VerifierAccepts g' H C' d P') ≤ (n * d : ℚ) / Fintype.card F)
+    (g : MvPolynomial (Fin (n + 1)) F) (H : Finset F) (C : F) (d : ℕ)
+    (hC : C ≠ sigma g H) (hd : ∀ i, degreeOf i g ≤ d) :
+    ∀ P : ProverStrategy (n + 1) F,
+    Prob (Fintype.piFinset fun _ : Fin (n + 1) => univ) (VerifierAccepts g H C d P) ≤ ((n + 1) * d : ℚ) / Fintype.card F := by
+      field_simp;
+      intro P
+      have h_sum : (∑ r0 : F, Prob (Fintype.piFinset (fun _ : Fin n => Finset.univ)) (fun r_tail => VerifierAccepts g H C d P (Fin.cons r0 r_tail)) : ℚ) ≤ (n + 1) * d := by
+        by_cases h_deg : ∀ r0 : F, (P 0 (fun _ => Fin.elim0 ‹_›)).degree ≤ d ∧ (∑ a ∈ H, (P 0 (fun _ => Fin.elim0 ‹_›)).eval a = C);
+        · have h_sum : (∑ r0 : F, if (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0 then 1 else (n * d : ℚ) / Fintype.card F) ≤ (n + 1) * d := by
+            have h_sum : (∑ r0 : F, if (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0 then 1 else 0 : ℚ) ≤ d := by
+              have h_sum : (Finset.univ.filter (fun r0 : F => (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0)).card ≤ d := by
+                have h_card_B : (Finset.filter (fun r0 => (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0) Finset.univ).card ≤ (Polynomial.roots ((P 0 (fun _ => Fin.elim0 ‹_›)) - (honest_prover_poly g H 0 (Fin.elim0)))).toFinset.card := by
+                  refine Finset.card_le_card ?_;
+                  intro r hr; simp_all +decide [ sub_eq_iff_eq_add ] ;
+                  intro h; simp_all +decide [ Finset.sum_const_zero ] ;
+                  exact hC ( h_deg.2.symm ▸ by simp +decide [ honest_prover_sum_check_zero ] );
+                refine' le_trans h_card_B ( le_trans ( Multiset.toFinset_card_le _ ) ( le_trans ( Polynomial.card_roots' _ ) _ ) );
+                refine' le_trans ( Polynomial.natDegree_sub_le _ _ ) _;
+                refine' max_le _ _;
+                · exact Polynomial.natDegree_le_of_degree_le ( h_deg 0 |>.1 );
+                · refine' le_trans ( Polynomial.natDegree_le_of_degree_le _ ) _;
+                  exact d;
+                  · convert honest_prover_degree_le g H 0 Fin.elim0 ( hd 0 ) using 1;
+                  · norm_num;
+              aesop;
+            have h_sum : (∑ r0 : F, if (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0 then 1 else (n * d : ℚ) / Fintype.card F) ≤ (∑ r0 : F, if (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0 then 1 else 0 : ℚ) + (n * d : ℚ) := by
+              simp +decide [ Finset.sum_ite ];
+              rw [ mul_div, div_le_iff₀ ] <;> norm_cast;
+              · rw [ mul_comm ] ; gcongr ; exact Finset.card_le_univ _;
+              · exact Fintype.card_pos_iff.mpr ⟨ 0 ⟩;
+            linarith;
+          refine' le_trans ( Finset.sum_le_sum _ ) h_sum;
+          intro r0 hr0
+          by_cases h_eq : (P 0 (fun _ => Fin.elim0 ‹_›)).eval r0 = (honest_prover_poly g H 0 (Fin.elim0)).eval r0;
+          · rw [ if_pos h_eq ];
+            exact div_le_one_of_le₀ ( mod_cast le_trans ( Finset.card_filter_le _ _ ) ( by simp +decide ) ) ( Nat.cast_nonneg _ );
+          · convert IH ( MvPolynomial.eval₂ MvPolynomial.C ( Fin.cons ( MvPolynomial.C r0 ) MvPolynomial.X ) g ) H ( ( P 0 fun _ => Fin.elim0 ‹_› ).eval r0 ) d _ _ ( tailStrategy P r0 ) using 1;
+            · congr! 2;
+              rw [ verifierAcceptsCons ];
+              exact ⟨ fun h => h.2.2, fun h => ⟨ h_deg r0 |>.1, h_deg r0 |>.2, h ⟩ ⟩;
+            · rw [ if_neg h_eq ];
+            · convert h_eq using 1;
+              exact (honest_prover_eval_zero_eq_sigma_eval g H r0).symm;
+            · exact degreeOf_eval2_cons_le g r0 d hd;
+        · refine' le_trans ( Finset.sum_le_sum fun r0 _ => _ ) _;
+          use fun r0 => if ( P 0 fun _ => Fin.elim0 ‹_› ).degree ≤ d ∧ ∑ a ∈ H, Polynomial.eval a ( P 0 fun _ => Fin.elim0 ‹_› ) = C then 1 else 0;
+          · split_ifs <;> simp_all +decide [ VerifierAccepts ];
+            simp +decide [ Prob ];
+            field_simp;
+            simp +decide [ Fin.forall_fin_succ ];
+            grind;
+          · by_cases h : ( P 0 fun _ => Fin.elim0 ‹_› ).degree ≤ d ∧ ∑ a ∈ H, Polynomial.eval a ( P 0 fun _ => Fin.elim0 ‹_› ) = C <;> simp_all +decide;
+            split_ifs <;> norm_cast ; aesop;
+            positivity;
+      convert h_sum using 1;
+      rw [ prob_split ];
+      simp +decide [ Finset.card_univ ]
