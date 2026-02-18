@@ -67,6 +67,19 @@ theorem schwartz_zippel {F : Type*} [Field F] [Fintype F] [DecidableEq F]
   · exact hg
 
 /-
+Corollary (Univariate root bound): Let $p \in \FF[X]$ be a non-zero univariate polynomial of degree
+at most $d$. Then for $r$ drawn uniformly at random from $\FF$:
+$\Prob_{r \sim \FF}[p(r) = 0] \leq d / |\FF|$.
+This is the Schwartz-Zippel lemma with $n = 1$ and $S = \FF$.
+-/
+open Polynomial Finset
+
+theorem univariate_root_bound {F : Type*} [Field F] [Fintype F] [DecidableEq F]
+    (p : Polynomial F) (hp : p ≠ 0) {d : ℕ} (hd : p.degree ≤ d) :
+    Prob (Finset.univ : Finset F) (fun r => p.eval r = 0) ≤ (d : ℚ) / Fintype.card F := by
+  sorry
+
+/-
 Probability over a product set can be computed by summing the probabilities of the conditioned events.
 -/
 open Finset
@@ -574,3 +587,18 @@ theorem soundness_step {F : Type*} [Field F] [Fintype F] [DecidableEq F] {n : �
       convert h_sum using 1;
       rw [ prob_split ];
       simp +decide [ Finset.card_univ ]
+
+/-
+Soundness: If $C \neq \sigma(g, H, n)$ and $g$ has individual degree at most $d$ in each variable,
+then for any prover strategy $P$:
+$\Prob_{r_1, \ldots, r_n \sim \FF}[\text{verifier accepts}] \leq n \cdot d / |\FF|$.
+The proof proceeds by induction on $n$, combining soundness_base_case and soundness_step.
+-/
+open MvPolynomial Finset Polynomial
+
+theorem soundness {F : Type*} [Field F] [Fintype F] [DecidableEq F] {n : ℕ} [NeZero n]
+    (g : MvPolynomial (Fin n) F) (H : Finset F) (C : F) (d : ℕ)
+    (hC : C ≠ sigma g H) (hd : ∀ i, degreeOf i g ≤ d) :
+    ∀ P : ProverStrategy n F,
+    Prob (Fintype.piFinset fun _ : Fin n => univ) (VerifierAccepts g H C d P) ≤ (n * d : ℚ) / Fintype.card F := by
+  sorry
